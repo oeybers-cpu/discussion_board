@@ -1,14 +1,428 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Discussion Board</title>
-    <meta name="description" content="A live discussion board where users can leave comments and respond to each other in real-time">
+    <title>Live Discussion Board (Client-Side Only)</title>
+    <meta name="description" content="A live discussion board where users can leave comments and respond to each other in real-time - no server required!">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #e94560;
+            --digital-purple: #8338ec;
+            --lighter-accent: #a5b4fc;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: #c5c6c7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Exo 2', sans-serif;
+            background: var(--primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .grid-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(131, 56, 236, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(131, 56, 236, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .header-title-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .pyramid {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 25px solid var(--digital-purple);
+            transform: rotate(180deg);
+        }
+
+        .header-title-container h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            color: var(--digital-purple);
+            text-shadow: 0 0 10px rgba(131, 56, 236, 0.5);
+        }
+
+        .eybers-header-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .eybers-link {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .eybers-link:hover {
+            background: rgba(131, 56, 236, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .left-tabs-container {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.2);
+            border-right: 1px solid var(--card-border);
+            padding: 15px 0;
+            z-index: 100;
+        }
+
+        .back-button-tab, .contact-button-tab {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            color: var(--text-primary);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .back-button-tab:hover, .contact-button-tab:hover {
+            background: rgba(131, 56, 236, 0.2);
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+        }
+
+        .sun-container {
+            position: relative;
+            width: 50px;
+            height: 50px;
+        }
+
+        .sun-core {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--digital-purple);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--digital-purple);
+        }
+
+        .sun-rays {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 40%, rgba(131, 56, 236, 0.2) 100%);
+            border-radius: 50%;
+            animation: sunPulse 3s infinite alternate;
+        }
+
+        @keyframes sunPulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        .header-content h2 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--digital-purple);
+            margin-bottom: 10px;
+        }
+
+        .header-content p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .comment-form-container {
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .card__header {
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .card__title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--digital-purple);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .card__body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'Exo 2', sans-serif;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--digital-purple);
+            box-shadow: 0 0 0 2px rgba(131, 56, 236, 0.3);
+        }
+
+        .submit-btn {
+            background: var(--digital-purple);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            background: #732fe8;
+            transform: translateY(-2px);
+        }
+
+        .comments-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            color: var(--digital-purple);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+        }
+
+        .comments-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .comment-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            border-left: 3px solid var(--digital-purple);
+            transition: all 0.3s ease;
+        }
+
+        .comment-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 4px;
+            background: var(--digital-purple);
+            transform: scaleX(0);
+            transform-origin: left;
+        }
+
+        .comment-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .username {
+            font-weight: bold;
+            color: var(--digital-purple);
+        }
+
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+        }
+
+        .reply-to {
+            margin-top: 5px;
+            color: var(--accent);
+            font-size: 0.9em;
+        }
+
+        .comment-body {
+            padding: 10px 0;
+            line-height: 1.5;
+        }
+
+        .stats-container {
+            margin-bottom: 30px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--digital-purple);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            transform: translateX(150%);
+            transition: transform 0.3s ease;
+            animation: slideIn 0.5s forwards, fadeOut 0.5s 2.5s forwards;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(150%); }
+            to { transform: translateX(0); }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        @media (max-width: 768px) {
+            .top-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .eybers-header-links {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .left-tabs-container {
+                position: static;
+                transform: none;
+                display: flex;
+                justify-content: center;
+                padding: 15px 0;
+            }
+            
+            .back-button-tab, .contact-button-tab {
+                width: auto;
+                padding: 8px 15px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="grid-lines"></div>
@@ -133,15 +547,253 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Notification Toast -->
-    <div id="notification" class="notification">
-        <i class="fas fa-check-circle"></i>
-        <span id="notificationText">Comment posted successfully!</span>
-    </div>
+        <!-- Notification Toast -->
+        <div id="notification" class="notification">
+            <i class="fas fa-check-circle"></i>
+            <span id="notificationText">Comment posted successfully!</span>
+        </div>
 
-    <script src="script.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const STORAGE_KEY = 'discussionComments';
+                
+                // Create Web Worker Blob
+                const workerCode = `
+                    self.onmessage = async (event) => {
+                        const { type, data } = event.data;
+                        const db = await indexedDB.open('DiscussionDB', 1);
+                        
+                        db.onsuccess = () => {
+                            const tx = db.result.transaction('comments', 'readwrite');
+                            const store = tx.objectStore('comments');
+                            
+                            switch(type) {
+                                case 'save':
+                                    // Keep only last 500 comments
+                                    const countReq = store.count();
+                                    countReq.onsuccess = () => {
+                                        if (countReq.result >= 500) {
+                                            const cursorReq = store.openCursor(null, 'prev');
+                                            cursorReq.onsuccess = (e) => {
+                                                const cursor = e.target.result;
+                                                if (cursor && cursor.key !== data.id) {
+                                                    cursor.delete();
+                                                }
+                                            };
+                                        }
+                                        store.put(data);
+                                    };
+                                    break;
+                                case 'load':
+                                    const req = store.getAll();
+                                    req.onsuccess = () => self.postMessage({ type: 'loaded', data: req.result });
+                                    break;
+                                case 'clear':
+                                    store.clear();
+                                    break;
+                            }
+                        };
+                    };
+                `;
+                
+                const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+                const workerURL = URL.createObjectURL(workerBlob);
+                const worker = new Worker(workerURL);
+                URL.revokeObjectURL(workerURL);
+
+                // Initialize IndexedDB
+                const dbRequest = indexedDB.open('DiscussionDB', 1);
+                dbRequest.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('comments')) {
+                        db.createObjectStore('comments', { keyPath: 'id' });
+                    }
+                };
+
+                // Load comments from DB
+                function loadComments() {
+                    return new Promise((resolve) => {
+                        worker.postMessage({ type: 'load' });
+                        worker.onmessage = (e) => {
+                            if (e.data.type === 'loaded') {
+                                resolve(e.data.data || []);
+                            }
+                        };
+                    });
+                }
+
+                // Save comment to DB
+                function saveComment(comment) {
+                    worker.postMessage({ type: 'save', data: comment });
+                }
+
+                // Clear all comments
+                function clearAllComments() {
+                    worker.postMessage({ type: 'clear' });
+                }
+
+                // Render comments to DOM
+                async function renderComments() {
+                    const comments = await loadComments();
+                    const container = document.getElementById('commentsContainer');
+                    container.innerHTML = '';
+                    
+                    comments.forEach(comment => {
+                        const commentEl = document.createElement('div');
+                        commentEl.className = 'comment-card';
+                        
+                        // Header
+                        const header = document.createElement('div');
+                        header.className = 'comment-header';
+                        
+                        const username = document.createElement('span');
+                        username.className = 'username';
+                        username.textContent = comment.userName;
+                        
+                        const timestamp = document.createElement('span');
+                        timestamp.className = 'timestamp';
+                        timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+                        
+                        header.appendChild(username);
+                        header.appendChild(timestamp);
+                        
+                        // Reply indicator
+                        if (comment.parentId) {
+                            const parentComment = comments.find(c => c.id === comment.parentId);
+                            const replyTo = document.createElement('div');
+                            replyTo.className = 'reply-to';
+                            replyTo.innerHTML = `Replying to: <strong>${parentComment?.userName || 'Unknown'}</strong>`;
+                            header.appendChild(replyTo);
+                        }
+                        
+                        // Comment body
+                        const body = document.createElement('div');
+                        body.className = 'comment-body';
+                        body.textContent = comment.text;
+                        
+                        // Assemble card
+                        commentEl.appendChild(header);
+                        commentEl.appendChild(body);
+                        container.appendChild(commentEl);
+                    });
+                }
+
+                // Update statistics
+                async function updateStats() {
+                    const comments = await loadComments();
+                    const total = comments.length;
+                    const uniqueUsers = new Set(comments.map(c => c.userName)).size;
+                    const replies = comments.filter(c => c.parentId).length;
+                    
+                    document.getElementById('totalComments').textContent = total;
+                    document.getElementById('totalUsers').textContent = uniqueUsers;
+                    document.getElementById('totalReplies').textContent = replies;
+                    
+                    // Last activity
+                    if (total > 0) {
+                        const lastComment = comments.reduce((prev, curr) => 
+                            new Date(prev.timestamp) > new Date(curr.timestamp) ? prev : curr
+                        );
+                        document.getElementById('lastActivity').textContent = 
+                            new Date(lastComment.timestamp).toLocaleString();
+                    } else {
+                        document.getElementById('lastActivity').textContent = 'Never';
+                    }
+                }
+
+                // Handle comment submission
+                function handleFormSubmit(e) {
+                    e.preventDefault();
+                    
+                    const userName = document.getElementById('userName').value.trim();
+                    const commentText = document.getElementById('commentText').value.trim();
+                    const parentCommentId = document.getElementById('parentComment').value;
+                    
+                    if (!userName || !commentText) return;
+                    
+                    const newComment = {
+                        id: Date.now().toString(),
+                        userName,
+                        text: commentText,
+                        parentId: parentCommentId || null,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    saveComment(newComment);
+                    document.getElementById('commentForm').reset();
+                    document.getElementById('parentComment').selectedIndex = 0;
+                    
+                    renderComments();
+                    updateStats();
+                    showNotification('Comment posted successfully!');
+                }
+
+                // Export comments as JSON
+                function exportComments() {
+                    loadComments().then(comments => {
+                        const blob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'discussion-comments.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    });
+                }
+
+                // Show notification toast
+                function showNotification(message) {
+                    const notification = document.getElementById('notification');
+                    const text = document.getElementById('notificationText');
+                    text.textContent = message;
+                    notification.classList.add('show');
+                    
+                    setTimeout(() => {
+                        notification.classList.remove('show');
+                    }, 3000);
+                }
+
+                // Populate parent comment dropdown
+                async function updateParentDropdown() {
+                    const select = document.getElementById('parentComment');
+                    select.innerHTML = '<option value="">New comment</option>';
+                    
+                    const comments = await loadComments();
+                    comments.forEach(comment => {
+                        const option = document.createElement('option');
+                        option.value = comment.id;
+                        option.textContent = `${comment.userName}: ${comment.text.slice(0, 30)}...`;
+                        select.appendChild(option);
+                    });
+                }
+
+                // Initialize
+                updateParentDropdown();
+                renderComments();
+                updateStats();
+
+                // Event listeners
+                document.getElementById('commentForm').addEventListener('submit', handleFormSubmit);
+                document.getElementById('clearAllBtn').addEventListener('click', clearAllComments);
+                document.getElementById('exportBtn').addEventListener('click', exportComments);
+                document.getElementById('refreshButton').addEventListener('click', async () => {
+                    await updateParentDropdown();
+                    renderComments();
+                    updateStats();
+                });
+                
+                // Handle storage events for cross-tab sync
+                window.addEventListener('storage', (event) => {
+                    if (event.key === STORAGE_KEY) {
+                        renderComments();
+                        updateStats();
+                    }
+                });
+            });
+        </script>
+    </div>
 </body>
 </html>
-
