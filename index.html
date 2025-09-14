@@ -1,1 +1,147 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Discussion Board</title>
+    <meta name="description" content="A live discussion board where users can leave comments and respond to each other in real-time">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="grid-lines"></div>
+    
+    <!-- Top header with title and pyramids -->
+    <div class="top-header">
+        <div class="header-title-container">
+            <div class="pyramid"></div>
+            <h1>Live Discussion Board</h1>
+            <div class="pyramid"></div>
+        </div>
+        <div class="eybers-header-links">
+            <button id="clearAllBtn" class="eybers-link">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+            <button id="exportBtn" class="eybers-link">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Container for left tabs -->
+    <div class="left-tabs-container">
+        <button class="back-button-tab" id="homeButton">
+            <i class="fas fa-home"></i> Home
+        </button>
+        <button class="contact-button-tab" id="refreshButton">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <div class="main-container">
+        <!-- Header with Sun Integration -->
+        <header>
+            <div class="sun-container">
+                <div class="sun-core"></div>
+                <div class="sun-rays"></div>
+            </div>
+            <div class="header-content">
+                <h2 style="color: var(--digital-purple); font-family: 'Orbitron', sans-serif; margin-bottom: 10px;">
+                    Join the Conversation
+                </h2>
+                <p style="color: var(--lighter-accent); font-size: 1rem;">
+                    Share your thoughts, respond to others, and engage in meaningful discussions
+                </p>
+            </div>
+        </header>
+
+        <!-- Comment Form -->
+        <div class="comment-form-container">
+            <div class="card">
+                <div class="card__header">
+                    <h3 class="card__title">
+                        <i class="fas fa-comment-dots"></i>
+                        Post a Comment
+                    </h3>
+                </div>
+                <div class="card__body">
+                    <form id="commentForm">
+                        <div class="form-group">
+                            <label for="userName">Your Name:</label>
+                            <input type="text" id="userName" name="userName" required placeholder="Enter your name">
+                        </div>
+                        <div class="form-group">
+                            <label for="commentText">Your Comment:</label>
+                            <textarea id="commentText" name="commentText" required placeholder="Share your thoughts..." rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="parentComment">Reply to (optional):</label>
+                            <select id="parentComment" name="parentComment">
+                                <option value="">New comment</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="submit-btn">
+                            <i class="fas fa-paper-plane"></i>
+                            Post Comment
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comments Display -->
+        <div class="comments-section">
+            <div class="section-title">
+                <i class="fas fa-comments"></i>
+                Discussion (<span id="commentCount">0</span> comments)
+            </div>
+            <div id="commentsContainer" class="comments-container">
+                <!-- Comments will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Statistics Card -->
+        <div class="stats-container">
+            <div class="card stats-card">
+                <div class="card__header">
+                    <h3 class="card__title">
+                        <i class="fas fa-chart-bar"></i>
+                        Discussion Stats
+                    </h3>
+                </div>
+                <div class="card__body">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalComments">0</div>
+                            <div class="stat-label">Total Comments</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalUsers">0</div>
+                            <div class="stat-label">Participants</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalReplies">0</div>
+                            <div class="stat-label">Replies</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="lastActivity">Never</div>
+                            <div class="stat-label">Last Activity</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification">
+        <i class="fas fa-check-circle"></i>
+        <span id="notificationText">Comment posted successfully!</span>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
