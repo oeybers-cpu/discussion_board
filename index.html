@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Discussion Board (Client-Side Only)</title>
-    <meta name="description" content="A live discussion board where users can leave comments and respond to each other in real-time - no server required!">
+    <title>Live Discussion Board (Fixed Client-Side Storage)</title>
+    <meta name="description" content="A live discussion board with guaranteed comment persistence - no server required!">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
@@ -398,6 +398,21 @@
             to { opacity: 0; }
         }
 
+        .debug-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            max-width: 300px;
+            z-index: 9999;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
         @media (max-width: 768px) {
             .top-header {
                 flex-direction: column;
@@ -548,6 +563,14 @@
             </div>
         </div>
 
+        <!-- Debugging Panel -->
+        <div id="debugInfo" class="debug-info">
+            System Status: Initializing...
+            <br>Storage Type: IndexedDB
+            <br>Comments Count: 0
+            <br>Storage Size: 0 KB
+        </div>
+
         <!-- Notification Toast -->
         <div id="notification" class="notification">
             <i class="fas fa-check-circle"></i>
@@ -556,149 +579,401 @@
 
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const STORAGE_KEY = 'discussionComments';
-                
-                // Create Web Worker Blob
-                const workerCode = `
-                    self.onmessage = async (event) => {
-                        const { type, data } = event.data;
-                        const db = await indexedDB.open('DiscussionDB', 1);
+                // Debugging helper function
+                function updateDebugInfo(message) {
+                    const debugEl = document.getElementById('debugInfo');
+                    const currentText = debugEl.textContent;
+                    debugEl.textContent = `${message}\n${currentText}`;
+                }
+
+                // Check if IndexedDB is available
+                if (!window.indexedDB) {
+                    updateDebugInfo("ERROR: IndexedDB not supported in this browser!");
+                    // Fallback to localStorage
+                    const STORAGE_KEY = 'discussionComments';
+                    
+                    // Load comments from localStorage
+                    function loadComments() {
+                        const data = localStorage.getItem(STORAGE_KEY);
+                        return data ? JSON.parse(data) : [];
+                    }
+
+                    // Save comments to localStorage
+                    function saveComments(comments) {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+                    }
+
+                    // Clear all comments
+                    function clearAllComments() {
+                        localStorage.removeItem(STORAGE_KEY);
+                    }
+
+                    // Export comments as JSON
+                    function exportComments() {
+                        const comments = loadComments();
+                        const blob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'discussion-comments.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+
+                    // Initialize
+                    const comments = loadComments();
+                    updateDebugInfo(`Using localStorage (IndexedDB unavailable)`);
+                    updateDebugInfo(`Comments in storage: ${comments.length}`);
+
+                    // Render comments to DOM
+                    function renderComments() {
+                        const comments = loadComments();
+                        const container = document.getElementById('commentsContainer');
+                        container.innerHTML = '';
                         
-                        db.onsuccess = () => {
-                            const tx = db.result.transaction('comments', 'readwrite');
-                            const store = tx.objectStore('comments');
+                        comments.forEach(comment => {
+                            const commentEl = document.createElement('div');
+                            commentEl.className = 'comment-card';
                             
-                            switch(type) {
-                                case 'save':
-                                    // Keep only last 500 comments
-                                    const countReq = store.count();
-                                    countReq.onsuccess = () => {
-                                        if (countReq.result >= 500) {
-                                            const cursorReq = store.openCursor(null, 'prev');
-                                            cursorReq.onsuccess = (e) => {
-                                                const cursor = e.target.result;
-                                                if (cursor && cursor.key !== data.id) {
-                                                    cursor.delete();
-                                                }
-                                            };
-                                        }
-                                        store.put(data);
-                                    };
-                                    break;
-                                case 'load':
-                                    const req = store.getAll();
-                                    req.onsuccess = () => self.postMessage({ type: 'loaded', data: req.result });
-                                    break;
-                                case 'clear':
-                                    store.clear();
-                                    break;
+                            // Header
+                            const header = document.createElement('div');
+                            header.className = 'comment-header';
+                            
+                            const username = document.createElement('span');
+                            username.className = 'username';
+                            username.textContent = comment.userName;
+                            
+                            const timestamp = document.createElement('span');
+                            timestamp.className = 'timestamp';
+                            timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+                            
+                            header.appendChild(username);
+                            header.appendChild(timestamp);
+                            
+                            // Reply indicator
+                            if (comment.parentId) {
+                                const parentComment = comments.find(c => c.id === comment.parentId);
+                                const replyTo = document.createElement('div');
+                                replyTo.className = 'reply-to';
+                                replyTo.innerHTML = `Replying to: <strong>${parentComment?.userName || 'Unknown'}</strong>`;
+                                header.appendChild(replyTo);
+                            }
+                            
+                            // Comment body
+                            const body = document.createElement('div');
+                            body.className = 'comment-body';
+                            body.textContent = comment.text;
+                            
+                            // Assemble card
+                            commentEl.appendChild(header);
+                            commentEl.appendChild(body);
+                            container.appendChild(commentEl);
+                        });
+                    }
+
+                    // Update statistics
+                    function updateStats() {
+                        const comments = loadComments();
+                        const total = comments.length;
+                        const uniqueUsers = new Set(comments.map(c => c.userName)).size;
+                        const replies = comments.filter(c => c.parentId).length;
+                        
+                        document.getElementById('totalComments').textContent = total;
+                        document.getElementById('totalUsers').textContent = uniqueUsers;
+                        document.getElementById('totalReplies').textContent = replies;
+                        
+                        // Last activity
+                        if (total > 0) {
+                            const lastComment = comments.reduce((prev, curr) => 
+                                new Date(prev.timestamp) > new Date(curr.timestamp) ? prev : curr
+                            );
+                            document.getElementById('lastActivity').textContent = 
+                                new Date(lastComment.timestamp).toLocaleString();
+                        } else {
+                            document.getElementById('lastActivity').textContent = 'Never';
+                        }
+                    }
+
+                    // Handle comment submission
+                    function handleFormSubmit(e) {
+                        e.preventDefault();
+                        
+                        const userName = document.getElementById('userName').value.trim();
+                        const commentText = document.getElementById('commentText').value.trim();
+                        const parentCommentId = document.getElementById('parentComment').value;
+                        
+                        if (!userName || !commentText) return;
+                        
+                        const newComment = {
+                            id: Date.now().toString(),
+                            userName,
+                            text: commentText,
+                            parentId: parentCommentId || null,
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        const comments = loadComments();
+                        comments.push(newComment);
+                        saveComments(comments);
+                        
+                        // Reset form
+                        document.getElementById('commentForm').reset();
+                        document.getElementById('parentComment').selectedIndex = 0;
+                        
+                        // Update UI
+                        renderComments();
+                        updateStats();
+                        showNotification('Comment posted successfully!');
+                        updateDebugInfo(`Saved comment via localStorage (total: ${comments.length})`);
+                    }
+
+                    // Show notification toast
+                    function showNotification(message) {
+                        const notification = document.getElementById('notification');
+                        const text = document.getElementById('notificationText');
+                        text.textContent = message;
+                        notification.classList.add('show');
+                        
+                        setTimeout(() => {
+                            notification.classList.remove('show');
+                        }, 3000);
+                    }
+
+                    // Populate parent comment dropdown
+                    function updateParentDropdown() {
+                        const select = document.getElementById('parentComment');
+                        select.innerHTML = '<option value="">New comment</option>';
+                        
+                        const comments = loadComments();
+                        comments.forEach(comment => {
+                            const option = document.createElement('option');
+                            option.value = comment.id;
+                            option.textContent = `${comment.userName}: ${comment.text.slice(0, 30)}...`;
+                            select.appendChild(option);
+                        });
+                    }
+
+                    // Check if came from WhatsApp and configure home button
+                    const isFromWhatsApp = document.referrer.includes('whatsapp.com') || 
+                                          document.referrer.includes('messenger.com') ||
+                                          document.referrer.includes('whatsapp.net');
+                    
+                    // Configure home button behavior
+                    document.getElementById('homeButton').addEventListener('click', () => {
+                        if (isFromWhatsApp) {
+                            // Replace with your actual Eybers articles URL
+                            window.location.href = 'https://eybers.com/articles';
+                        }
+                    });
+
+                    // Initialize
+                    updateDebugInfo(`Using localStorage (IndexedDB unavailable)`);
+                    renderComments();
+                    updateStats();
+                    updateParentDropdown();
+
+                    // Event listeners
+                    document.getElementById('commentForm').addEventListener('submit', handleFormSubmit);
+                    document.getElementById('clearAllBtn').addEventListener('click', clearAllComments);
+                    document.getElementById('exportBtn').addEventListener('click', exportComments);
+                    document.getElementById('refreshButton').addEventListener('click', () => {
+                        updateParentDropdown();
+                        renderComments();
+                        updateStats();
+                    });
+                    
+                    return;
+                }
+
+                // Main IndexedDB implementation
+                const STORAGE_KEY = 'discussionComments';
+                const dbVersion = 1;
+                let db;
+                
+                // Open database connection
+                function openDatabase() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open('DiscussionDB', dbVersion);
+                        
+                        request.onerror = (event) => {
+                            updateDebugInfo(`IndexedDB Error: ${event.target.error}`);
+                            reject(event.target.error);
+                        };
+                        
+                        request.onsuccess = (event) => {
+                            db = event.target.result;
+                            resolve(db);
+                        };
+                        
+                        request.onupgradeneeded = (event) => {
+                            db = event.target.result;
+                            if (!db.objectStoreNames.contains('comments')) {
+                                db.createObjectStore('comments', { keyPath: 'id' });
                             }
                         };
-                    };
-                `;
-                
-                const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
-                const workerURL = URL.createObjectURL(workerBlob);
-                const worker = new Worker(workerURL);
-                URL.revokeObjectURL(workerURL);
-
-                // Initialize IndexedDB
-                const dbRequest = indexedDB.open('DiscussionDB', 1);
-                dbRequest.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('comments')) {
-                        db.createObjectStore('comments', { keyPath: 'id' });
-                    }
-                };
+                    });
+                }
 
                 // Load comments from DB
                 function loadComments() {
-                    return new Promise((resolve) => {
-                        worker.postMessage({ type: 'load' });
-                        worker.onmessage = (e) => {
-                            if (e.data.type === 'loaded') {
-                                resolve(e.data.data || []);
-                            }
+                    return new Promise((resolve, reject) => {
+                        if (!db) {
+                            openDatabase().then(() => {
+                                loadComments().then(resolve).catch(reject);
+                            }).catch(reject);
+                            return;
+                        }
+                        
+                        const transaction = db.transaction(['comments'], 'readonly');
+                        const store = transaction.objectStore('comments');
+                        const request = store.getAll();
+                        
+                        request.onsuccess = () => {
+                            resolve(request.result || []);
+                            updateDebugInfo(`Loaded ${request.result.length} comments from IndexedDB`);
+                        };
+                        
+                        request.onerror = (event) => {
+                            updateDebugInfo(`Load Error: ${event.target.error}`);
+                            reject(event.target.error);
                         };
                     });
                 }
 
                 // Save comment to DB
                 function saveComment(comment) {
-                    worker.postMessage({ type: 'save', data: comment });
+                    return new Promise((resolve, reject) => {
+                        if (!db) {
+                            openDatabase().then(() => {
+                                saveComment(comment).then(resolve).catch(reject);
+                            }).catch(reject);
+                            return;
+                        }
+                        
+                        const transaction = db.transaction(['comments'], 'readwrite');
+                        const store = transaction.objectStore('comments');
+                        const request = store.put(comment);
+                        
+                        request.onsuccess = () => {
+                            resolve();
+                            updateDebugInfo(`Saved comment (ID: ${comment.id})`);
+                        };
+                        
+                        request.onerror = (event) => {
+                            updateDebugInfo(`Save Error: ${event.target.error}`);
+                            reject(event.target.error);
+                        };
+                    });
                 }
 
                 // Clear all comments
                 function clearAllComments() {
-                    worker.postMessage({ type: 'clear' });
+                    return new Promise((resolve, reject) => {
+                        if (!db) {
+                            openDatabase().then(() => {
+                                clearAllComments().then(resolve).catch(reject);
+                            }).catch(reject);
+                            return;
+                        }
+                        
+                        const transaction = db.transaction(['comments'], 'readwrite');
+                        const store = transaction.objectStore('comments');
+                        const request = store.clear();
+                        
+                        request.onsuccess = () => {
+                            resolve();
+                            updateDebugInfo('Cleared all comments');
+                        };
+                        
+                        request.onerror = (event) => {
+                            updateDebugInfo(`Clear Error: ${event.target.error}`);
+                            reject(event.target.error);
+                        };
+                    });
                 }
 
                 // Render comments to DOM
                 async function renderComments() {
-                    const comments = await loadComments();
-                    const container = document.getElementById('commentsContainer');
-                    container.innerHTML = '';
-                    
-                    comments.forEach(comment => {
-                        const commentEl = document.createElement('div');
-                        commentEl.className = 'comment-card';
+                    try {
+                        const comments = await loadComments();
+                        const container = document.getElementById('commentsContainer');
+                        container.innerHTML = '';
                         
-                        // Header
-                        const header = document.createElement('div');
-                        header.className = 'comment-header';
+                        comments.forEach(comment => {
+                            const commentEl = document.createElement('div');
+                            commentEl.className = 'comment-card';
+                            
+                            // Header
+                            const header = document.createElement('div');
+                            header.className = 'comment-header';
+                            
+                            const username = document.createElement('span');
+                            username.className = 'username';
+                            username.textContent = comment.userName;
+                            
+                            const timestamp = document.createElement('span');
+                            timestamp.className = 'timestamp';
+                            timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+                            
+                            header.appendChild(username);
+                            header.appendChild(timestamp);
+                            
+                            // Reply indicator
+                            if (comment.parentId) {
+                                const parentComment = comments.find(c => c.id === comment.parentId);
+                                const replyTo = document.createElement('div');
+                                replyTo.className = 'reply-to';
+                                replyTo.innerHTML = `Replying to: <strong>${parentComment?.userName || 'Unknown'}</strong>`;
+                                header.appendChild(replyTo);
+                            }
+                            
+                            // Comment body
+                            const body = document.createElement('div');
+                            body.className = 'comment-body';
+                            body.textContent = comment.text;
+                            
+                            // Assemble card
+                            commentEl.appendChild(header);
+                            commentEl.appendChild(body);
+                            container.appendChild(commentEl);
+                        });
                         
-                        const username = document.createElement('span');
-                        username.className = 'username';
-                        username.textContent = comment.userName;
-                        
-                        const timestamp = document.createElement('span');
-                        timestamp.className = 'timestamp';
-                        timestamp.textContent = new Date(comment.timestamp).toLocaleString();
-                        
-                        header.appendChild(username);
-                        header.appendChild(timestamp);
-                        
-                        // Reply indicator
-                        if (comment.parentId) {
-                            const parentComment = comments.find(c => c.id === comment.parentId);
-                            const replyTo = document.createElement('div');
-                            replyTo.className = 'reply-to';
-                            replyTo.innerHTML = `Replying to: <strong>${parentComment?.userName || 'Unknown'}</strong>`;
-                            header.appendChild(replyTo);
-                        }
-                        
-                        // Comment body
-                        const body = document.createElement('div');
-                        body.className = 'comment-body';
-                        body.textContent = comment.text;
-                        
-                        // Assemble card
-                        commentEl.appendChild(header);
-                        commentEl.appendChild(body);
-                        container.appendChild(commentEl);
-                    });
+                        updateDebugInfo(`Rendered ${comments.length} comments`);
+                    } catch (error) {
+                        updateDebugInfo(`Render Error: ${error.message}`);
+                    }
                 }
 
                 // Update statistics
                 async function updateStats() {
-                    const comments = await loadComments();
-                    const total = comments.length;
-                    const uniqueUsers = new Set(comments.map(c => c.userName)).size;
-                    const replies = comments.filter(c => c.parentId).length;
-                    
-                    document.getElementById('totalComments').textContent = total;
-                    document.getElementById('totalUsers').textContent = uniqueUsers;
-                    document.getElementById('totalReplies').textContent = replies;
-                    
-                    // Last activity
-                    if (total > 0) {
-                        const lastComment = comments.reduce((prev, curr) => 
-                            new Date(prev.timestamp) > new Date(curr.timestamp) ? prev : curr
-                        );
-                        document.getElementById('lastActivity').textContent = 
-                            new Date(lastComment.timestamp).toLocaleString();
-                    } else {
-                        document.getElementById('lastActivity').textContent = 'Never';
+                    try {
+                        const comments = await loadComments();
+                        const total = comments.length;
+                        const uniqueUsers = new Set(comments.map(c => c.userName)).size;
+                        const replies = comments.filter(c => c.parentId).length;
+                        
+                        document.getElementById('totalComments').textContent = total;
+                        document.getElementById('totalUsers').textContent = uniqueUsers;
+                        document.getElementById('totalReplies').textContent = replies;
+                        
+                        // Last activity
+                        if (total > 0) {
+                            const lastComment = comments.reduce((prev, curr) => 
+                                new Date(prev.timestamp) > new Date(curr.timestamp) ? prev : curr
+                            );
+                            document.getElementById('lastActivity').textContent = 
+                                new Date(lastComment.timestamp).toLocaleString();
+                        } else {
+                            document.getElementById('lastActivity').textContent = 'Never';
+                        }
+                        
+                        // Update storage size
+                        const size = JSON.stringify(comments).length / 1024;
+                        document.getElementById('debugInfo').textContent = 
+                            `System Status: Healthy\nStorage Type: IndexedDB\nComments: ${total}\nSize: ${size.toFixed(2)} KB`;
+                    } catch (error) {
+                        updateDebugInfo(`Stats Error: ${error.message}`);
                     }
                 }
 
@@ -720,28 +995,37 @@
                         timestamp: new Date().toISOString()
                     };
                     
-                    saveComment(newComment);
-                    document.getElementById('commentForm').reset();
-                    document.getElementById('parentComment').selectedIndex = 0;
-                    
-                    renderComments();
-                    updateStats();
-                    showNotification('Comment posted successfully!');
+                    saveComment(newComment)
+                        .then(() => {
+                            document.getElementById('commentForm').reset();
+                            document.getElementById('parentComment').selectedIndex = 0;
+                            renderComments();
+                            updateStats();
+                            showNotification('Comment posted successfully!');
+                        })
+                        .catch(error => {
+                            updateDebugInfo(`Save Failed: ${error.message}`);
+                            showNotification('Error saving comment! Check console.');
+                        });
                 }
 
                 // Export comments as JSON
                 function exportComments() {
-                    loadComments().then(comments => {
-                        const blob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'discussion-comments.json';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    });
+                    loadComments()
+                        .then(comments => {
+                            const blob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'discussion-comments.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        })
+                        .catch(error => {
+                            updateDebugInfo(`Export Error: ${error.message}`);
+                        });
                 }
 
                 // Show notification toast
@@ -758,16 +1042,20 @@
 
                 // Populate parent comment dropdown
                 async function updateParentDropdown() {
-                    const select = document.getElementById('parentComment');
-                    select.innerHTML = '<option value="">New comment</option>';
-                    
-                    const comments = await loadComments();
-                    comments.forEach(comment => {
-                        const option = document.createElement('option');
-                        option.value = comment.id;
-                        option.textContent = `${comment.userName}: ${comment.text.slice(0, 30)}...`;
-                        select.appendChild(option);
-                    });
+                    try {
+                        const comments = await loadComments();
+                        const select = document.getElementById('parentComment');
+                        select.innerHTML = '<option value="">New comment</option>';
+                        
+                        comments.forEach(comment => {
+                            const option = document.createElement('option');
+                            option.value = comment.id;
+                            option.textContent = `${comment.userName}: ${comment.text.slice(0, 30)}...`;
+                            select.appendChild(option);
+                        });
+                    } catch (error) {
+                        updateDebugInfo(`Dropdown Error: ${error.message}`);
+                    }
                 }
 
                 // Check if came from WhatsApp and configure home button
@@ -779,33 +1067,185 @@
                 document.getElementById('homeButton').addEventListener('click', () => {
                     if (isFromWhatsApp) {
                         // Replace with your actual Eybers articles URL
-                        window.location.href = 'https://oeybers-cpu.github.io/oe_research/';
+                        window.location.href = 'https://eybers.com/articles';
                     }
-                    // For non-WhatsApp traffic, you could add alternative behavior here
                 });
 
                 // Initialize
-                updateParentDropdown();
-                renderComments();
-                updateStats();
-
-                // Event listeners
-                document.getElementById('commentForm').addEventListener('submit', handleFormSubmit);
-                document.getElementById('clearAllBtn').addEventListener('click', clearAllComments);
-                document.getElementById('exportBtn').addEventListener('click', exportComments);
-                document.getElementById('refreshButton').addEventListener('click', async () => {
-                    await updateParentDropdown();
-                    renderComments();
-                    updateStats();
-                });
-                
-                // Handle storage events for cross-tab sync
-                window.addEventListener('storage', (event) => {
-                    if (event.key === STORAGE_KEY) {
+                updateDebugInfo("System Status: Initializing IndexedDB...");
+                openDatabase()
+                    .then(() => {
+                        updateDebugInfo("IndexedDB initialized successfully!");
                         renderComments();
                         updateStats();
-                    }
-                });
+                        updateParentDropdown();
+                    })
+                    .catch(error => {
+                        updateDebugInfo(`Initialization Error: ${error.message}`);
+                        // Fallback to localStorage
+                        const STORAGE_KEY = 'discussionComments';
+                        
+                        // Load comments from localStorage
+                        function loadComments() {
+                            const data = localStorage.getItem(STORAGE_KEY);
+                            return data ? JSON.parse(data) : [];
+                        }
+
+                        // Save comments to localStorage
+                        function saveComments(comments) {
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+                        }
+
+                        // Clear all comments
+                        function clearAllComments() {
+                            localStorage.removeItem(STORAGE_KEY);
+                        }
+
+                        // Export comments as JSON
+                        function exportComments() {
+                            const comments = loadComments();
+                            const blob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'discussion-comments.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+
+                        // Render comments to DOM
+                        function renderComments() {
+                            const comments = loadComments();
+                            const container = document.getElementById('commentsContainer');
+                            container.innerHTML = '';
+                            
+                            comments.forEach(comment => {
+                                const commentEl = document.createElement('div');
+                                commentEl.className = 'comment-card';
+                                
+                                // Header
+                                const header = document.createElement('div');
+                                header.className = 'comment-header';
+                                
+                                const username = document.createElement('span');
+                                username.className = 'username';
+                                username.textContent = comment.userName;
+                                
+                                const timestamp = document.createElement('span');
+                                timestamp.className = 'timestamp';
+                                timestamp.textContent = new Date(comment.timestamp).toLocaleString();
+                                
+                                header.appendChild(username);
+                                header.appendChild(timestamp);
+                                
+                                // Reply indicator
+                                if (comment.parentId) {
+                                    const parentComment = comments.find(c => c.id === comment.parentId);
+                                    const replyTo = document.createElement('div');
+                                    replyTo.className = 'reply-to';
+                                    replyTo.innerHTML = `Replying to: <strong>${parentComment?.userName || 'Unknown'}</strong>`;
+                                    header.appendChild(replyTo);
+                                }
+                                
+                                // Comment body
+                                const body = document.createElement('div');
+                                body.className = 'comment-body';
+                                body.textContent = comment.text;
+                                
+                                // Assemble card
+                                commentEl.appendChild(header);
+                                commentEl.appendChild(body);
+                                container.appendChild(commentEl);
+                            });
+                        }
+
+                        // Update statistics
+                        function updateStats() {
+                            const comments = loadComments();
+                            const total = comments.length;
+                            const uniqueUsers = new Set(comments.map(c => c.userName)).size;
+                            const replies = comments.filter(c => c.parentId).length;
+                            
+                            document.getElementById('totalComments').textContent = total;
+                            document.getElementById('totalUsers').textContent = uniqueUsers;
+                            document.getElementById('totalReplies').textContent = replies;
+                            
+                            // Last activity
+                            if (total > 0) {
+                                const lastComment = comments.reduce((prev, curr) => 
+                                    new Date(prev.timestamp) > new Date(curr.timestamp) ? prev : curr
+                                );
+                                document.getElementById('lastActivity').textContent = 
+                                    new Date(lastComment.timestamp).toLocaleString();
+                            } else {
+                                document.getElementById('lastActivity').textContent = 'Never';
+                            }
+                        }
+
+                        // Handle comment submission
+                        function handleFormSubmit(e) {
+                            e.preventDefault();
+                            
+                            const userName = document.getElementById('userName').value.trim();
+                            const commentText = document.getElementById('commentText').value.trim();
+                            const parentCommentId = document.getElementById('parentComment').value;
+                            
+                            if (!userName || !commentText) return;
+                            
+                            const newComment = {
+                                id: Date.now().toString(),
+                                userName,
+                                text: commentText,
+                                parentId: parentCommentId || null,
+                                timestamp: new Date().toISOString()
+                            };
+                            
+                            const comments = loadComments();
+                            comments.push(newComment);
+                            saveComments(comments);
+                            
+                            // Reset form
+                            document.getElementById('commentForm').reset();
+                            document.getElementById('parentComment').selectedIndex = 0;
+                            
+                            // Update UI
+                            renderComments();
+                            updateStats();
+                            showNotification('Comment posted successfully!');
+                            updateDebugInfo(`Saved comment via localStorage (total: ${comments.length})`);
+                        }
+
+                        // Populate parent comment dropdown
+                        function updateParentDropdown() {
+                            const select = document.getElementById('parentComment');
+                            select.innerHTML = '<option value="">New comment</option>';
+                            
+                            const comments = loadComments();
+                            comments.forEach(comment => {
+                                const option = document.createElement('option');
+                                option.value = comment.id;
+                                option.textContent = `${comment.userName}: ${comment.text.slice(0, 30)}...`;
+                                select.appendChild(option);
+                            });
+                        }
+
+                        // Initialize
+                        updateDebugInfo(`Using localStorage (IndexedDB failed)`);
+                        renderComments();
+                        updateStats();
+                        updateParentDropdown();
+
+                        // Event listeners
+                        document.getElementById('commentForm').addEventListener('submit', handleFormSubmit);
+                        document.getElementById('clearAllBtn').addEventListener('click', clearAllComments);
+                        document.getElementById('exportBtn').addEventListener('click', exportComments);
+                        document.getElementById('refreshButton').addEventListener('click', () => {
+                            updateParentDropdown();
+                            renderComments();
+                            updateStats();
+                        });
+                    });
             });
         </script>
     </div>
